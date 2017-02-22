@@ -28,6 +28,8 @@ def main():
 
     print('exit success')
 
+    print('kristi was here')
+
 
 if __name__ == '__main__':
     main()
