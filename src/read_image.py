@@ -21,28 +21,29 @@ def read_single_image(filename, sz=None):
 
     Args:
         filename: Name of file to read.
+
+    Returns image: multidimensional image
     """
 
-    image_meta = np.array([])
     try:
 
         # Open image
-        im = Image.open(os.path.join(filename))
+        img = Image.open(os.path.join(filename))
         
         # Convert image to black-and-white
-        im = im.convert('L')
+        img = img.convert('L')
 
         # Resize to given size (if given)
         if (sz is not None):
-            im = im.resize(self.sz, Image.ANTIALIAS)
+            img = img.resize(self.sz, Image.ANTIALIAS)
 
         # Return image and metadata
-        image_meta = np.array(im, dtype=np.uint8)
+        return img
     except IOError as e:
         logger.error('I/O error: {0}'.format(e))
     except:
         logger.error('Cannot open image')
-    return image_meta
+    return None
 
 
 def read_images(path):
@@ -61,7 +62,6 @@ def read_images(path):
     """
     id_num = 0
     images, id_nums = [], []
-    c = 0
 
     # Process individual files from subdirectories in given path
     for dirname, dirnames, filenames in os.walk(path):
@@ -70,10 +70,10 @@ def read_images(path):
             subject_path = os.path.join(dirname, subdirname)    # path/subject_path/
 
             for imagename in os.listdir(subject_path):           # path/subject_path/imagename
-                image_meta = read_single_image(os.path.join(subject_path, imagename))
+                img = read_single_image(os.path.join(subject_path, imagename))
                 
-                if len(image_meta) > 0:
-                    images.append(image_meta)
+                if img is not None:
+                    images.append(np.asarray(img, dtype=np.uint8))
                     id_nums.append(id_num)
 
             id_num += 1

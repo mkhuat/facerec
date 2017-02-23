@@ -20,15 +20,11 @@ def main():
     '''
 
     logger.info('Running main!')
-    mat = ri.read_images(IMG_DATASET_PATH)
+    [img, face_id_nums] = ri.read_images(IMG_DATASET_PATH)
 
-
-    print model.flattenImage(mat)
-
+    print model.flattenImage(img)
 
     print('exit success')
-
-    print('kristi was here')
 
 
 if __name__ == '__main__':

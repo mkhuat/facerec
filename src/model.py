@@ -1,30 +1,17 @@
+import os
+import PIL
+import logging
 import numpy as np
+from builtins import range
 
-# def asColumnMatrix(X):
-#     """
-#     Creates a column-matrix from multi-dimensional data items.
-    
-#     Args:
-#     	X: List with multi-dimensional data. 
-#     	   [images, id_nums] where images is [image, metadata]
-#     """
-    
-#     images = np.array(X[0])						# an array of images of form [image, metadata]
-#     if len(X) == 0:
-#         return np.array([])
+logger = logging.getLogger(__name__)
 
-#     total = 1
-#     for i in range(0, np.ndim(images)):	# loop through all images
-#         total *= images.shape[i]		# multiplying total by 2, in our case
+logging.basicConfig(filename='log_' + os.path.basename(__file__),
+                            filemode='w',
+                            format='%(asctime)s %(name)s %(levelname)s:\t %(message)s',
+                            datefmt='%H:%M:%S',
+                            level=logging.INFO)
 
-#     result = np.empty([total, 0], dtype=images.dtype)
-    
-#     for col in X:
-#     	# number of rows is inferred, but the number of cols is 1 here
-#         col = np.array(col)
-#         result = np.append(result, col.reshape(-1,1), axis=1)
-    
-#     return np.asmatrix(result)
 
 def flattenImage(X):
 	"""
@@ -34,22 +21,27 @@ def flattenImage(X):
      	X: List with multi-dimensional data. 
      	   [images, id_nums] where images is [image, metadata]
 	"""
+
+	# If we have no images to process, just return an empty array
+	# if len(X) == 0:
+	# 	return np.array([])
+
+
+	# If we have no image to process, just return an empty array
 	if len(X) == 0:
 		return np.array([])
 
-	images = np.array(X[0])
+	x0 = np.asarray(X[0])	# Assume that image is standardized
 
-	total = 1
-	for i in range(0, np.ndim(images)):	# loop through all images
-		total *= images.shape[i]		# multiplying total by 2, in our case
+	# Initialize a matrix that represents the flattened image
+	flat_img = np.empty((x0.size, 0), dtype=x0.dtype)
 
-
-	result = np.empty(shape=(total, 0), dtype=images.dtype)
-
+	# Grab each column in the multidimensional image 
+	# and add to our horizontal matrix
 	for col in X:
-		result = np.hstack((result, np.asarray(col).reshape(-1, 1)))
-	return result
-
+		flat_img = np.append(flat_img, np.asarray(col).reshape(-1,1), axis=1)
+	
+	return np.asmatrix(flat_img)
 
 
   
