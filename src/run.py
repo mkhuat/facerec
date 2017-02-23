@@ -20,9 +20,11 @@ def main():
     '''
 
     logger.info('Running main!')
-    [img, face_id_nums] = ri.read_images(IMG_DATASET_PATH)
+    [imgs, face_ids] = ri.read_images(IMG_DATASET_PATH)
 
-    print model.flattenImage(img)
+    
+    flattened = model.flattenImages(imgs)
+    print flattened
 
     print('exit success')
 
