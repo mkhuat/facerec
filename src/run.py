@@ -23,8 +23,11 @@ def main():
     [imgs, face_ids] = ri.read_images(IMG_DATASET_PATH)
 
     
-    flattened = model.flattenImages(imgs)
-    print flattened
+    # flattened = model.flattenImages(imgs)
+    # logger.into(flattened)
+
+    mod = model.Model(imgs, face_ids)
+    
 
     print('exit success')
 
