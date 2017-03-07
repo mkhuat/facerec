@@ -73,7 +73,7 @@ def read_images(path):
                 img = read_single_image(os.path.join(subject_path, imagename))
                 
                 if img is not None:
-                    images.append(np.asarray(img, dtype=np.uint8))
+                    images.append(np.asarray(img, dtype='float64'))
                     id_nums.append(id_num)
 
             id_num += 1

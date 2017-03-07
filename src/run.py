@@ -22,12 +22,14 @@ def main():
     logger.info('Running main!')
     [imgs, face_ids] = ri.read_images(IMG_DATASET_PATH)
 
-    
-    # flattened = model.flattenImages(imgs)
-    # logger.into(flattened)
-
-    mod = model.Model(imgs, face_ids)
-    
+    mod = model.Model('/Users/melissa/Documents/446/proj/face_images_att')
+    mod.compute()
+    # match_id = mod.classify()
+    # match = (match_id == 10)
+    # if match == True:
+    #     print 'Predicted correctly'
+    # else:
+    #     print 'Predicted incorrectly'    
 
     print('exit success')
 
