@@ -24,12 +24,8 @@ def main():
 
     mod = model.Model('/Users/melissa/Documents/446/proj/face_images_att')
     mod.compute()
-    # match_id = mod.classify()
-    # match = (match_id == 10)
-    # if match == True:
-    #     print 'Predicted correctly'
-    # else:
-    #     print 'Predicted incorrectly'    
+    mod.plotEigenvectors()  
+    #mod.plotReconstruction()
 
     print('exit success')
 

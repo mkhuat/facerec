@@ -73,10 +73,37 @@ def read_images(path):
                 img = read_single_image(os.path.join(subject_path, imagename))
                 
                 if img is not None:
-                    images.append(np.asarray(img, dtype='float64'))
+                    images.append(np.asarray(img, dtype='uint8'))
                     id_nums.append(id_num)
 
             id_num += 1
 
     assert len(images) == len(id_nums)
     return [images, id_nums]
+
+
+def normPixel(X, low=0, high=255, dtype='float64'):
+    """
+    Normalizes pixel values to between 0 and 255 given an 'image'
+
+    Args
+        X: given image data in (rows, cols)
+        low: lower bound for image data
+        high: upper bound for image data
+    Returns
+        normalized image data
+    """
+    X = np.asarray(X)
+    
+    min_x = float(np.min(X))
+    max_x = float(np.max(X))
+
+    # normalize the pixel to a value between 0 and 1
+    X = X - min_x
+    X = X / (max_x - min_x)
+
+    # scale to the expected pixel size
+    X = X * (high - low)
+    X = X + low
+
+    return np.asarray(X, dtype=dtype)
