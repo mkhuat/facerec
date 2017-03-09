@@ -20,7 +20,7 @@ logging.basicConfig(filename='log_' + os.path.basename(__file__),
 
 class Model(object):
 
-	def __init__(self, path_to_faces):
+	def __init__(self, path_to_faces, num_components):
 		"""
 		Args
 			X: the list of all images in our dataset
@@ -43,10 +43,8 @@ class Model(object):
 		# We choose the number of components to be the 
 		# number of images
 		self.images_count = self.subject_count * self.train_set_count
-		self.components_count = self.images_count	# we can set the number of principal
+		self.components_count = num_components	# we can set the number of principal
 											# components here
-
-		print "hi im components count: " + str(self.components_count)
 
 		self.training_ids = []
 		training_imgs = np.empty(shape=(self.img_dim, self.images_count), dtype='float64')
@@ -100,13 +98,17 @@ class Model(object):
 		self.eigenvals = self.eigenvals[0:self.components_count].copy()			
 		self.eigenvects = self.eigenvects[0:self.components_count].copy()
 
+		# our eigenvects are of dim: (10304, 320). Each col reps a vector.
 		self.eigenvects = self.eigenvects.transpose()									# to column form
 		self.eigenvects = training_imgs * self.eigenvects	
 		self.eigenvects = self.eigenvects / np.linalg.norm(self.eigenvects, axis=0)		# normalize each eigenvector
 
+		# this represents all of the projected(!) images into the subspace??
+		# (320, 10304) * (10304, 320) = (320 components, 320 images)
 		self.feats = self.eigenvects.transpose() * training_imgs 	# computing the normalized weights
-		
-		# Should be (400, 400) for ATT database with all training images
+
+		# shape of our feats: (320 components, 320 images)
+		logger.info("feats shape: " + str(self.eigenvects.transpose().shape) + "*" + str(training_imgs.shape) + "=" + str(self.feats.shape))
 		logger.info('images dimensions' + str(np.shape(self.feats)))
 
 
@@ -138,7 +140,7 @@ class Model(object):
 		return np.asmatrix(flat_img)
 
 
-	def classify(self, path_to_img):
+	def classify(self, path_to_img, actual_id, k):
 		"""
 		Classify an image to one of the subjects using 1-NN search.
 
@@ -151,12 +153,47 @@ class Model(object):
 		flat_img = np.array(img, dtype='float64').flatten()
 		proj = self.project(flat_img)
 
-		diff = self.feats - proj				# finding the min ||feature weights - projected||
-		norms = np.linalg.norm(diff, axis=0)
+		diff = self.feats - proj				
+		distances = np.linalg.norm(diff, axis=0)	# Euclidean distance metric
+		
+		predicted_ids = self.kNN(distances, k)
+		for predicted_id in predicted_ids:
+			if (predicted_id == actual_id): return 1
 
-		# calculate the id of the 1st nearest neighbor pic
-		closest_face_id = (np.argmin(norms) / self.train_set_count) + 1
-		return closest_face_id
+		return 0
+
+
+	def NN(self, distances):
+		"""
+		Returns the nearest match (by id) given computed distances
+
+		Args
+			distances:
+				computed distances between projected image 
+				and PCA subspace vectors
+		"""
+		return (np.argmin(distances) / self.train_set_count) + 1
+
+
+	def kNN(self, distances, k):
+		"""
+		Returns the k nearest matches (by id) given computed distances
+
+		Args
+			distances:
+				computed distances between projected image 
+				and PCA subspace vectors
+			k:
+				number of neighbors to examine
+		"""
+
+		idx_sorted = np.array(distances).argsort()[:k]	# sorts ascending, indexes
+		closest_matches = []
+
+		for idx in idx_sorted:
+			closest_matches.append((idx / self.train_set_count) + 1)
+
+		return closest_matches
 
 
 	def project(self, flat_img):
@@ -168,43 +205,31 @@ class Model(object):
 		Return
 			reconstruction from the PCA basis: y = W_t(x - mu)
 		"""
-		# dims: flat image and mean image are both (10304, ) in our ex.
-		flat_img = flat_img - self.mean_img
+
+		# dims: flat image and mean image are both (10304 pixels, ) here
+		flat_img -= self.mean_img
 		
 		# reshape the flat image so that it has a single column (10304, 1)
-		flat_img = np.reshape(flat_img, (self.img_dim, 1))
-
-		# result dimension is (320, 1)
-		return self.eigenvects.transpose() * flat_img
+		# result dimension is (320 components, 1)
+		return self.eigenvects.transpose() * flat_img.reshape(-1, 1)
 
 
-	def reconstruct(self):
+	def reconstruct(self, projected):
 		"""
 		Reconstructs images
 		"""
-		# results in [10304 pixels * 320 images]
-		X = self.eigenvects * self.feats 	
-	
-		# For every image... X.shape[1] = 320 = number of images
-		for col in xrange(X.shape[1]):
 
-			# Add mean pixel to each pixel
-			X[:, col] += np.reshape(self.mean_img, (self.img_dim, 1))
+		# need to reconstruct the projection! we get (10304, 1) result
+		# eigenvectors: (10304 pixels, 320 components/eigen)
+		# projected: (320 components, 1 image)
+		X = self.eigenvects * projected
 
-
-
-		# X = self.feats * self.eigenvects.transpose()
-		# print X.shape
-
-		# for row in xrange(X.shape[0]):
-		# 	X[row, :] += np.reshape(self.mean_img, (1, self.img_dim))
-	
+		# add mean to each pixel in x
+		# result dimension is (10304, 1)
+		return X + self.mean_img.reshape(-1, 1)
 
 
-
-		return X
-
-	def compute(self):
+	def compute(self, k=1):
 		"""
 		Prints the precision of the facial recognition algorithm
 		on the test set.
@@ -231,15 +256,20 @@ class Model(object):
 					img_name = str(test_id) + '.pgm'
 					path_to_query = os.path.join(self.path_to_faces, subj_name, img_name)
 
-					predicted_id = self.classify(path_to_query)
-					result = (predicted_id == face_id)
+					### new shit
+					### classify returns a 0 or a 1: 0 for match, 1 for no match
+					test_correct += self.classify(path_to_query, face_id, k)
 
-					if result == True:
-						test_correct += 1
+					# predicted_id = self.classify(path_to_query, method)
+					# result = (predicted_id == face_id)
+
+					# if result == True:
+					# 	test_correct += 1
 
 		print 'Computing face matches complete'
 		self.precision = float(100. * test_correct / test_count)
 		print '\nCorrect: ' + str(self.precision) + '%'
+		return self.precision
 
 
 	def plotEigenvectors(self):
@@ -273,7 +303,7 @@ class Model(object):
 
 		# Plots the first 16 eigenvectors
 		eigenvects_to_plot = []
-		for i in xrange(16):
+		for i in xrange(min(self.components_count, 16)):
 
 			# reshape the eigenvector from (10304, 1) -> (112, 92)
 			evect = self.eigenvects[:, i].reshape((self.img_height, self.img_width))
@@ -281,67 +311,36 @@ class Model(object):
 			# add to our list of eigenvectors to plot
 			eigenvects_to_plot.append(ri.normPixel(evect))
 
- 		self.plotImage(title="Eigenfaces", images=eigenvects_to_plot, rows=4, cols=4, sptitle="Eigenfaces", colormap=cm.jet)
+ 		self.plotImage(title='Eigenfaces', images=eigenvects_to_plot, colormap=cm.jet)
 
 
-	def plotReconstruction(self):
+	def plotReconstruction(self, path_to_img):
 		"""
 		Plots the reconstruction of a face.
 
-	
+		Args
+			path_to_img: the file path to an image
 		"""
-		# # results in [10304 pixels * 320 images]
-		# X = self.eigenvects * self.feats 	
 		
-		# # For every image... X.shape[1] = 320 = number of images
-		# for col in xrange(X.shape[1]):
-
-		# 	# Add mean pixel to each pixel
-		# 	X[:, col] += np.reshape(self.mean_img, (self.img_dim, 1))
-
-		# R = self.bleh(300)
-		# R = R[:,0].reshape((112, 92))
-		# to_plot = [ri.normPixel(R)]
-		# self.plotImage(title="Reconstruction", images=to_plot, rows=4, cols=4, sptitle="Reconstruction")
-	
-		R = self.reconstruct()
-		R = R[:,0].reshape((self.img_height, self.img_width))
-		#R = R[0,:].reshape((self.img_height, self.img_width))
-		to_plot = [ri.normPixel(R)]
-		self.plotImage(title="Reconstruction", images=to_plot, rows=4, cols=4, sptitle="Reconstruction")
+		img = ri.read_single_image(path_to_img)
+		flat_img = np.array(img, dtype='float64').flatten()
 		
+		projected = self.project(flat_img)
+		reconstructed = self.reconstruct(projected)
+		reconstructed = reconstructed.reshape((self.img_height, self.img_width))
+		
+		to_plot = [ri.normPixel(reconstructed)]
+		self.plotImage(title='Reconstruction', images=to_plot)
 
-	def bleh(self, numEigens):
+
+	def plotImage(self, title, images, colormap=cm.gray):
 		"""
-		Reconstructs a flat image
+		Saves an image in the current directory given a list of image arrays.
 		"""
-		# results in [10304 pixels * 320 images]
-		X = self.eigenvects[:, 0:numEigens] * self.feats[0:numEigens, 0:numEigens]
-		
-		# For every image... X.shape[1] = number of images
-		for col in xrange(X.shape[1]):
-
-			# Add mean pixel to each pixel
-			X[:, col] += np.reshape(self.mean_img[col], (self.img_dim, 1))
-
-		return X
-
-
-	def plotImage(self, title, images, rows, cols, sptitle="subplot", sptitles=[], colormap=cm.gray, ticks_visible=True):
 		fig = plt.figure()
-		# main title
-		fig.text(.5, .95, title, horizontalalignment='center') 
 		for i in xrange(len(images)):
-			ax0 = fig.add_subplot(rows,cols,(i + 1))
-			plt.setp(ax0.get_xticklabels(), visible=False)
-			plt.setp(ax0.get_yticklabels(), visible=False)
-			if len(sptitles) == len(images):
-				plt.title("%s #%s" % (sptitle, str(sptitles[i])), self.create_font('Tahoma',10))
-			else:
-				plt.title("%s #%d" % (sptitle, (i+1)), self.create_font('Tahoma',10))
-			plt.imshow(np.asarray(images[i]), cmap=colormap)
-
-		plt.show()
+		 	plt.imshow(np.asarray(images[i]), cmap=colormap)
+			fig.savefig(title + str(i))
 
 
 	def create_font(self, fontname='Tahoma', fontsize=10):
